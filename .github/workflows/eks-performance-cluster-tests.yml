@@ -124,7 +124,7 @@ jobs:
         with:
           go-version: ~1.25.8
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ env.CWA_GITHUB_TEST_REPO_BRANCH }}

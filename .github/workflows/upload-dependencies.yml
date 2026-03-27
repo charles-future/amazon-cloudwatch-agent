@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.test_repo_name }}
           ref: ${{ inputs.test_repo_branch }}
