@@ -1,0 +1,10 @@
+{
+  "logs": {
+    "metrics_collected": {
+      "test": "val",
+      "kubernetes": {
+      }
+    },
+    "endpoint_override":"https://fake_endpoint"
+  }
+}

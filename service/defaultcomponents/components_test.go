@@ -1,0 +1,119 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT
+
+package defaultcomponents
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/collector/component"
+	"golang.org/x/exp/maps"
+
+	"github.com/aws/amazon-cloudwatch-agent/internal/util/collections"
+)
+
+func TestComponents(t *testing.T) {
+	factories, err := Factories()
+	assert.NoError(t, err)
+	wantReceivers := []string{
+		"awscontainerinsightreceiver",
+		"awscontainerinsightskueuereceiver",
+		"awsecscontainermetrics",
+		"awsefareceiver",
+		"awsekshyperpodreceiver",
+		"awsnvmereceiver",
+		"awsxray",
+		"collectd",
+		"filelog",
+		"hostmetrics",
+		"jaeger",
+		"jmx",
+		"kafka",
+		"kubeletstats",
+		"nop",
+		"otlp",
+		"prometheus",
+		"statsd",
+		"systemmetrics",
+		"tcplog",
+		"udplog",
+		"zipkin",
+	}
+	gotReceivers := collections.MapSlice(maps.Keys(factories.Receivers), component.Type.String)
+	assert.Equal(t, len(wantReceivers), len(gotReceivers))
+	for _, typeStr := range wantReceivers {
+		assert.Contains(t, gotReceivers, typeStr)
+	}
+
+	wantProcessors := []string{
+		"attributes",
+		"awsapplicationsignals",
+		"awsattributelimit",
+		"awsdevicepodcorrelation",
+		"awsentity",
+		"awsneuron",
+		"batch",
+		"cumulativetodelta",
+		"deltatocumulative",
+		"deltatorate",
+		"ec2tagger",
+		"filter",
+		"gpuattributes",
+		"groupbyattrs",
+		"groupbytrace",
+		"k8sattributes",
+		"kueueattributes",
+		"memory_limiter",
+		"metricsgeneration",
+		"metricstarttime",
+		"metricstransform",
+		"probabilistic_sampler",
+		"resource",
+		"resourcedetection",
+		"rollup",
+		"span",
+		"tail_sampling",
+		"transform",
+	}
+	gotProcessors := collections.MapSlice(maps.Keys(factories.Processors), component.Type.String)
+	assert.Equal(t, len(wantProcessors), len(gotProcessors))
+	for _, typeStr := range wantProcessors {
+		assert.Contains(t, gotProcessors, typeStr)
+	}
+
+	wantExporters := []string{
+		"awscloudwatch",
+		"awscloudwatchlogs",
+		"awsemf",
+		"awsxray",
+		"debug",
+		"nop",
+		"otlphttp",
+		"prometheusremotewrite",
+	}
+	gotExporters := collections.MapSlice(maps.Keys(factories.Exporters), component.Type.String)
+	assert.Equal(t, len(wantExporters), len(gotExporters))
+	for _, typeStr := range wantExporters {
+		assert.Contains(t, gotExporters, typeStr)
+	}
+
+	wantExtensions := []string{
+		"agenthealth",
+		"awsproxy",
+		"ecs_observer",
+		"entitystore",
+		"file_storage",
+		"health_check",
+		"k8smetadata",
+		"pprof",
+		"server",
+		"sigv4auth",
+		"zpages",
+	}
+	gotExtensions := collections.MapSlice(maps.Keys(factories.Extensions), component.Type.String)
+	assert.Equal(t, len(wantExtensions), len(gotExtensions))
+	for _, typeStr := range wantExtensions {
+		assert.Contains(t, gotExtensions, typeStr)
+	}
+}

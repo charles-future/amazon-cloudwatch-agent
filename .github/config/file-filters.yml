@@ -1,0 +1,14 @@
+lint:
+  - '**/*.go'
+  - '**/*.sh'
+  - '.golangci.yml'
+  - 'packaging/**'
+  - 'go.mod'
+  - 'Makefile'
+
+build:
+  - 'Makefile'
+  - 'go.sum'
+  - '!({.github,amazon-cloudwatch-container-insights})/**/*.{yml,yaml}'
+  - '.github/workflows/PR-build.yml'
+  - '**/*.{go,toml,json,conf}'

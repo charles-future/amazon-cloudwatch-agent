@@ -1,0 +1,104 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT
+
+package agenthealth
+
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/confmap/confmaptest"
+	"go.opentelemetry.io/collector/confmap/xconfmap"
+
+	"github.com/aws/amazon-cloudwatch-agent/extension/agenthealth/handler/stats/agent"
+	"github.com/aws/amazon-cloudwatch-agent/extension/agenthealth/metadata"
+)
+
+func TestLoadConfig(t *testing.T) {
+	testCases := []struct {
+		id   component.ID
+		want component.Config
+	}{
+		{
+			id:   component.NewID(TypeStr),
+			want: NewFactory().CreateDefaultConfig(),
+		},
+		{
+			id:   component.NewIDWithName(TypeStr, "1"),
+			want: &Config{IsUsageDataEnabled: false, Stats: nil},
+		},
+		{
+			id:   component.NewIDWithName(TypeStr, "2"),
+			want: &Config{IsUsageDataEnabled: true, Stats: &agent.StatsConfig{Operations: []string{"ListBuckets"}}},
+		},
+		{
+			id:   component.NewIDWithName(TypeStr, "3"),
+			want: &Config{IsUsageDataEnabled: true, UsageMetadata: []metadata.Metadata{"obs_jvm", "obs_tomcat"}},
+		},
+	}
+	for _, testCase := range testCases {
+		conf, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
+		require.NoError(t, err)
+		cfg := NewFactory().CreateDefaultConfig()
+		sub, err := conf.Sub(testCase.id.String())
+		require.NoError(t, err)
+		require.NoError(t, sub.Unmarshal(cfg))
+
+		assert.NoError(t, xconfmap.Validate(cfg))
+		assert.Equal(t, testCase.want, cfg)
+	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	testCases := map[string]struct {
+		cfg     component.Config
+		wantErr bool
+	}{
+		"WithEmptyConfig": {
+			cfg: &Config{},
+		},
+		"WithUsageMetadata/Unsupported": {
+			cfg: &Config{
+				IsUsageDataEnabled: true,
+				UsageMetadata: []metadata.Metadata{
+					"unsupported_metadata",
+				},
+			},
+			wantErr: true,
+		},
+		"WithUsageMetadata/Mixed": {
+			cfg: &Config{
+				IsUsageDataEnabled: true,
+				UsageMetadata: []metadata.Metadata{
+					"obs_jvm",
+					"unsupported_metadata",
+				},
+			},
+			wantErr: true,
+		},
+		"WithUsageMetadata/Supported": {
+			cfg: &Config{
+				IsUsageDataEnabled: true,
+				UsageMetadata: []metadata.Metadata{
+					"obs_jvm",
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert.NoError(t, confmap.New().Unmarshal(testCase.cfg))
+			err := testCase.cfg.(*Config).Validate()
+			if testCase.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

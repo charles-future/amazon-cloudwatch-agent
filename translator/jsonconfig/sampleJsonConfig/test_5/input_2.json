@@ -1,0 +1,25 @@
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/opt/aws/amazon-cloudwatch-agent/logs/test2.log"
+          }
+        ]
+      }
+    },
+    "metrics_collected": {
+      "kubernetes": {
+      },
+      "ecs": {
+        "metrics_collection_interval": 30
+      }
+    }
+  },
+  "metrics": {
+    "metrics_collected": {
+      "statsd": {}
+    }
+  }
+}

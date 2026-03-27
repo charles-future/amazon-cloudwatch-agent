@@ -1,0 +1,11 @@
+{
+  "traces": {
+    "traces_collected": {
+      "otlp": {
+      },
+      "xray": {
+      }
+    },
+    "transit_spans_in_otlp_format": true
+  }
+}

@@ -1,0 +1,60 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT
+
+package prometheusremotewrite
+
+import (
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configauth"
+	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/exporter"
+
+	"github.com/aws/amazon-cloudwatch-agent/translator/translate/agent"
+	"github.com/aws/amazon-cloudwatch-agent/translator/translate/otel/common"
+)
+
+var (
+	AMPSectionKey = common.ConfigKey(common.MetricsKey, common.MetricsDestinationsKey, common.AMPKey)
+)
+
+type translator struct {
+	name    string
+	factory exporter.Factory
+}
+
+var _ common.ComponentTranslator = (*translator)(nil)
+
+func NewTranslator() common.ComponentTranslator {
+	return NewTranslatorWithName("")
+}
+
+func NewTranslatorWithName(name string) common.ComponentTranslator {
+	return &translator{name, prometheusremotewriteexporter.NewFactory()}
+}
+
+func (t *translator) ID() component.ID {
+	return component.NewIDWithName(t.factory.Type(), t.name)
+}
+
+// Translate creates an exporter config based on the fields in the
+// amp or prometheus section of the JSON config.
+func (t *translator) Translate(conf *confmap.Conf) (component.Config, error) {
+	if conf == nil || !(conf.IsSet(AMPSectionKey) && conf.IsSet(common.ConfigKey(AMPSectionKey, common.WorkspaceIDKey))) {
+		return nil, &common.MissingKeyError{ID: t.ID(), JsonKey: AMPSectionKey + " or " + common.ConfigKey(AMPSectionKey, common.WorkspaceIDKey)}
+	}
+	cfg := t.factory.CreateDefaultConfig().(*prometheusremotewriteexporter.Config)
+	cfg.ClientConfig.Auth = &configauth.Authentication{AuthenticatorID: component.NewID(component.MustNewType(common.SigV4Auth))}
+	cfg.ResourceToTelemetrySettings = resourcetotelemetry.Settings{Enabled: true, ClearAfterCopy: true}
+	// ignoring bool return value since we are checking with isSet beforehand
+	value, _ := common.GetString(conf, common.ConfigKey(AMPSectionKey, common.WorkspaceIDKey))
+	domain := "amazonaws.com"
+	if agent.Global_Config.UseDualStackEndpoint {
+		domain = "api.aws"
+	}
+	ampEndpoint := "https://aps-workspaces." + agent.Global_Config.Region + "." + domain + "/workspaces/" + value + "/api/v1/remote_write"
+
+	cfg.ClientConfig.Endpoint = ampEndpoint
+	return cfg, nil
+}

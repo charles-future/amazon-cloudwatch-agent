@@ -1,0 +1,9 @@
+{
+  "metrics": {
+    "metrics_collected": {
+      "jmx": {
+        "measurement": []
+      }
+    }
+  }
+}

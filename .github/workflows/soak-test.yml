@@ -1,0 +1,120 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT
+
+name: Soak Test
+env:
+  KEY_NAME: ${{ secrets.KEY_NAME }}
+  PRIVATE_KEY: ${{ secrets.AWS_PRIVATE_KEY }}
+  CWA_GITHUB_TEST_REPO_NAME: "aws/amazon-cloudwatch-agent-test"
+  CWA_GITHUB_TEST_REPO_URL: "https://github.com/aws/amazon-cloudwatch-agent-test.git"
+  CWA_GITHUB_TEST_REPO_BRANCH: "main"
+
+on:
+  schedule:
+    # Run at midnight on Sunday (once a week)
+    - cron: "0 0 * * 0"
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  BuildAndUpload:
+    uses: ./.github/workflows/test-build.yml
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      BucketKey: "integration-test/binary/${{ github.sha }}"
+      PackageBucketKey: "integration-test/binary/${{ github.sha }}"
+      TerraformAWSAssumeRole: ${{ vars.TERRAFORM_AWS_ASSUME_ROLE }}
+      Bucket: ${{ vars.S3_INTEGRATION_BUCKET }}
+
+  BuildAndUploadPackages:
+    uses: ./.github/workflows/test-build-packages.yml
+    needs: [BuildAndUpload]
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      BucketKey: "integration-test/binary/${{ github.sha }}"
+      PackageBucketKey: "integration-test/packaging/${{ github.sha }}"
+      TerraformAWSAssumeRole: ${{ vars.TERRAFORM_AWS_ASSUME_ROLE }}
+      Bucket: ${{ vars.S3_INTEGRATION_BUCKET }}
+
+  BuildDocker:
+    needs: [BuildAndUpload]
+    uses: ./.github/workflows/test-build-docker.yml
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      ContainerRepositoryNameAndTag: "cwagent-integration-test:${{ github.sha }}"
+      BucketKey: "integration-test/binary/${{ github.sha }}"
+      PackageBucketKey: "integration-test/packaging/${{ github.sha }}"
+
+  DeploySoakTest:
+    name: "DeploySoakTest"
+    needs: [BuildAndUpload, BuildAndUploadPackages, BuildDocker]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
+          ref: ${{ env.CWA_GITHUB_TEST_REPO_BRANCH }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.TERRAFORM_AWS_ASSUME_ROLE }}
+          aws-region: us-west-2
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.0
+
+      - name: Verify Terraform version
+        run: terraform --version
+
+      # @TODO we can add a matrix in the future but for for now, we will only deploy to AL2.
+      - name: Terraform apply
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 3
+          timeout_minutes: 60
+          retry_wait_seconds: 5
+          command: |
+            cd terraform/ec2/linux
+            terraform init
+            terraform apply --auto-approve \
+              -var="github_test_repo=${{ env.CWA_GITHUB_TEST_REPO_URL }}" \
+              -var="github_test_repo_branch=${{env.CWA_GITHUB_TEST_REPO_BRANCH}}" \
+              -var="cwa_github_sha=${{ github.sha }}" \
+              -var="user=ec2-user" \
+              -var="ami=cloudwatch-agent-integration-test-al2*" \
+              -var="arc=amd64" \
+              -var="binary_name=amazon-cloudwatch-agent.rpm" \
+              -var="s3_bucket=${{ vars.S3_INTEGRATION_BUCKET }}" \
+              -var="ssh_key_name=${{ env.KEY_NAME }}" \
+              -var="ssh_key_value=${{ env.PRIVATE_KEY }}" \
+              -var="test_name=SoakTest" \
+              -var="test_dir=./test/soak -run TestSoakHigh"
+
+      #This is here just in case workflow cancel
+      - name: Terraform destroy
+        if: ${{ cancelled() }}
+        uses: nick-fields/retry@v2
+        with:
+          max_attempts: 3
+          timeout_minutes: 8
+          retry_wait_seconds: 5
+          command: cd terraform/ec2/linux && terraform destroy --auto-approve

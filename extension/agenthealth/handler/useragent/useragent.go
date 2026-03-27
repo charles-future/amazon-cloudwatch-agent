@@ -1,0 +1,267 @@
+// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// SPDX-License-Identifier: MIT
+
+package useragent
+
+import (
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+	"sync"
+
+	"github.com/google/uuid"
+	telegraf "github.com/influxdata/telegraf/config"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
+	"go.opentelemetry.io/collector/otelcol"
+	"go.uber.org/atomic"
+	"golang.org/x/exp/maps"
+
+	"github.com/aws/amazon-cloudwatch-agent/cfg/envconfig"
+	"github.com/aws/amazon-cloudwatch-agent/extension/agenthealth/handler/stats/agent"
+	"github.com/aws/amazon-cloudwatch-agent/internal/util/collections"
+	"github.com/aws/amazon-cloudwatch-agent/internal/version"
+	"github.com/aws/amazon-cloudwatch-agent/receiver/adapter"
+	"github.com/aws/amazon-cloudwatch-agent/translator/translate/otel/common"
+)
+
+const (
+	flagRunAsUser                 = "run_as_user"
+	flagContainerInsights         = "container_insights"
+	flagAppSignals                = "application_signals"
+	flagEnhancedContainerInsights = "enhanced_container_insights"
+	flagSELinux                   = "selinux"
+	flagROSA                      = "rosa"
+	separator                     = " "
+
+	typeInputs     = "inputs"
+	typeProcessors = "processors"
+	typeOutputs    = "outputs"
+	typeFeature    = "feature"
+)
+
+var (
+	singleton UserAgent
+	once      sync.Once
+)
+
+type UserAgent interface {
+	SetComponents(otelCfg *otelcol.Config, telegrafCfg *telegraf.Config)
+	SetContainerInsightsFlag()
+	AddFeatureFlags(features ...string)
+	Header(isUsageDataEnabled bool) string
+	Listen(listener func())
+	Reset()
+}
+
+type userAgent struct {
+	dataLock sync.Mutex
+	id       string
+
+	listenerLock sync.Mutex
+	listeners    []func()
+	isRoot       bool
+
+	inputs     collections.Set[string]
+	processors collections.Set[string]
+	outputs    collections.Set[string]
+	feature    collections.Set[string]
+
+	inputsStr     atomic.String
+	processorsStr atomic.String
+	outputsStr    atomic.String
+	featureStr    atomic.String
+}
+
+var _ UserAgent = (*userAgent)(nil)
+
+func (ua *userAgent) SetComponents(otelCfg *otelcol.Config, telegrafCfg *telegraf.Config) {
+	ua.dataLock.Lock()
+	defer ua.dataLock.Unlock()
+
+	for _, input := range telegrafCfg.Inputs {
+		ua.inputs.Add(input.Config.Name)
+		ua.setWindowsEventLogFeatureFlags(input)
+	}
+
+	for _, output := range telegrafCfg.Outputs {
+		ua.outputs.Add(output.Config.Name)
+	}
+
+	// Adding SELinux status
+	if envconfig.IsSelinuxEnabled() {
+		ua.outputs.Add(flagSELinux)
+	}
+	//Adding ROSA status
+	if envconfig.IsRunningInROSA() {
+		ua.outputs.Add(flagROSA)
+	}
+
+	for _, pipeline := range otelCfg.Service.Pipelines {
+		for _, receiver := range pipeline.Receivers {
+			// trim the adapter prefix from adapted Telegraf plugins
+			name := strings.TrimPrefix(receiver.Type().String(), adapter.TelegrafPrefix)
+			ua.inputs.Add(name)
+			if name == common.JmxKey {
+				cfg, ok := otelCfg.Receivers[receiver].(*jmxreceiver.Config)
+				if ok {
+					targetSystems := strings.Split(cfg.TargetSystem, ",")
+					for _, system := range targetSystems {
+						targetSystem := name + "-" + system
+						ua.inputs.Add(targetSystem)
+					}
+				}
+			}
+		}
+		for _, processor := range pipeline.Processors {
+			ua.processors.Add(processor.Type().String())
+		}
+		for _, exporter := range pipeline.Exporters {
+			ua.outputs.Add(exporter.Type().String())
+			if exporter.Type().String() == "awsemf" {
+				cfg, ok := otelCfg.Exporters[exporter].(*awsemfexporter.Config)
+				if ok {
+					if cfg.IsAppSignalsEnabled() {
+						ua.outputs.Add(flagAppSignals)
+						agent.UsageFlags().Set(agent.FlagAppSignal)
+					}
+					if cfg.IsEnhancedContainerInsights() {
+						ua.outputs.Add(flagEnhancedContainerInsights)
+						agent.UsageFlags().Set(agent.FlagEnhancedContainerInsights)
+					}
+				}
+			}
+		}
+	}
+
+	if !ua.isRoot {
+		ua.inputs.Add(flagRunAsUser)
+	}
+
+	// Add ipv6 feature flag if dualstack endpoint is enabled
+	if os.Getenv(envconfig.AWS_USE_DUALSTACK_ENDPOINT) == "true" {
+		ua.feature.Add("ipv6")
+	}
+
+	ua.inputsStr.Store(componentsStr(typeInputs, ua.inputs))
+	ua.processorsStr.Store(componentsStr(typeProcessors, ua.processors))
+	ua.outputsStr.Store(componentsStr(typeOutputs, ua.outputs))
+	ua.featureStr.Store(componentsStr(typeFeature, ua.feature))
+	ua.notify()
+}
+
+func (ua *userAgent) SetContainerInsightsFlag() {
+	ua.dataLock.Lock()
+	defer ua.dataLock.Unlock()
+	if !ua.outputs.Contains(flagContainerInsights) {
+		ua.outputs.Add(flagContainerInsights)
+		ua.outputsStr.Store(componentsStr(typeOutputs, ua.outputs))
+		ua.notify()
+	}
+}
+
+func (ua *userAgent) AddFeatureFlags(features ...string) {
+	ua.dataLock.Lock()
+	defer ua.dataLock.Unlock()
+	featureCount := len(ua.feature)
+	for _, feature := range features {
+		if feature != "" {
+			ua.feature.Add(feature)
+		}
+	}
+	if len(ua.feature) > featureCount {
+		ua.featureStr.Store(componentsStr(typeFeature, ua.feature))
+		ua.notify()
+	}
+}
+
+// Reset allows tests to reset the user agent.
+func (ua *userAgent) Reset() {
+	ua.dataLock.Lock()
+	defer ua.dataLock.Unlock()
+	ua.inputs = collections.NewSet[string]()
+	ua.processors = collections.NewSet[string]()
+	ua.outputs = collections.NewSet[string]()
+	ua.feature = collections.NewSet[string]()
+
+	ua.inputsStr.Store("")
+	ua.processorsStr.Store("")
+	ua.outputsStr.Store("")
+	ua.featureStr.Store("")
+	ua.notify()
+}
+
+func (ua *userAgent) Listen(listener func()) {
+	ua.listenerLock.Lock()
+	defer ua.listenerLock.Unlock()
+	ua.listeners = append(ua.listeners, listener)
+}
+
+func (ua *userAgent) notify() {
+	ua.listenerLock.Lock()
+	defer ua.listenerLock.Unlock()
+	for _, listener := range ua.listeners {
+		listener()
+	}
+}
+
+func (ua *userAgent) Header(isUsageDataEnabled bool) string {
+	if envUserAgent := os.Getenv(envconfig.CWAGENT_USER_AGENT); envUserAgent != "" {
+		return envUserAgent
+	}
+	if !isUsageDataEnabled {
+		return version.Full()
+	}
+
+	var components []string
+	inputs := ua.inputsStr.Load()
+	if inputs != "" {
+		components = append(components, inputs)
+	}
+	processors := ua.processorsStr.Load()
+	if processors != "" {
+		components = append(components, processors)
+	}
+	outputs := ua.outputsStr.Load()
+	if outputs != "" {
+		components = append(components, outputs)
+	}
+	feature := ua.featureStr.Load()
+	if feature != "" {
+		components = append(components, feature)
+	}
+
+	return strings.TrimSpace(fmt.Sprintf("%s ID/%s %s", version.Full(), ua.id, strings.Join(components, separator)))
+}
+
+func componentsStr(componentType string, componentSet collections.Set[string]) string {
+	if len(componentSet) == 0 {
+		return ""
+	}
+	components := maps.Keys(componentSet)
+	sort.Strings(components)
+	return fmt.Sprintf("%s:(%s)", componentType, strings.Join(components, separator))
+}
+
+func isRunningAsRoot() bool {
+	return os.Getuid() == 0
+}
+
+func newUserAgent() *userAgent {
+	return &userAgent{
+		id:         uuid.NewString(),
+		isRoot:     isRunningAsRoot(),
+		inputs:     collections.NewSet[string](),
+		processors: collections.NewSet[string](),
+		outputs:    collections.NewSet[string](),
+		feature:    collections.NewSet[string](),
+	}
+}
+
+func Get() UserAgent {
+	once.Do(func() {
+		singleton = newUserAgent()
+	})
+	return singleton
+}
