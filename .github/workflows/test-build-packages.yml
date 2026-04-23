@@ -67,12 +67,12 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           path: cwa
           fetch-depth: 0
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{env.CWA_GITHUB_TEST_REPO_NAME}}
           path: test
@@ -148,7 +148,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
