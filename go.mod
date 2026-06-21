@@ -219,7 +219,7 @@ require (
 	go.opentelemetry.io/collector/otelcol v0.124.0
 	go.opentelemetry.io/collector/otelcol/otelcoltest v0.124.0
 	go.opentelemetry.io/collector/pdata v1.30.0
-	go.opentelemetry.io/collector/pipeline v0.124.0
+	go.opentelemetry.io/collector/pipeline v1.54.0
 	go.opentelemetry.io/collector/processor v1.30.0
 	go.opentelemetry.io/collector/processor/batchprocessor v0.124.0
 	go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.124.0
