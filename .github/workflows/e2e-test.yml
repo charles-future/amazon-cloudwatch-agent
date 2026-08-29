@@ -46,7 +46,7 @@ jobs:
       operator_repo_name: ${{env.OPERATOR_GITHUB_REPO_NAME}}
     steps:
       - name: Checkout the target repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           repository: ${{env.OPERATOR_GITHUB_REPO_NAME}}
           ref: ${{ inputs.operator-branch || 'main' }}
@@ -102,7 +102,7 @@ jobs:
       ECR_OPERATOR_REPO: ${{ steps.set-outputs.outputs.ECR_OPERATOR_REPO }}
       ECR_TARGET_ALLOCATOR_REPO: ${{ steps.set-outputs.outputs.ECR_TARGET_ALLOCATOR_REPO }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{env.CWA_GITHUB_TEST_REPO_NAME}}
           ref: ${{env.CWA_GITHUB_TEST_REPO_BRANCH}}
@@ -139,7 +139,7 @@ jobs:
     outputs:
       eks_e2e_jmx_matrix: ${{ steps.set-matrix.outputs.eks_e2e_jmx_matrix }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{env.CWA_GITHUB_TEST_REPO_NAME}}
           ref: ${{env.CWA_GITHUB_TEST_REPO_BRANCH}}

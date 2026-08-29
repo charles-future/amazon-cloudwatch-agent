@@ -69,7 +69,7 @@ jobs:
       ec2_windows_wd_matrix: ${{ steps.set-matrix.outputs.ec2_windows_wd_matrix }}
       ec2_windows_wd_nvidia_matrix: ${{ steps.set-matrix.outputs.ec2_windows_wd_nvidia_matrix }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ inputs.test_repo_branch || env.CWA_GITHUB_TEST_REPO_BRANCH }}
@@ -100,7 +100,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ inputs.test_repo_branch || env.CWA_GITHUB_TEST_REPO_BRANCH }}
@@ -202,7 +202,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ inputs.test_repo_branch || env.CWA_GITHUB_TEST_REPO_BRANCH }}
@@ -297,7 +297,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ inputs.test_repo_branch || env.CWA_GITHUB_TEST_REPO_BRANCH }}
@@ -399,7 +399,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{ env.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ inputs.test_repo_branch || env.CWA_GITHUB_TEST_REPO_BRANCH }}

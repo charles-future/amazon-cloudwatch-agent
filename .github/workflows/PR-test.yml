@@ -88,7 +88,7 @@ jobs:
           echo "CWA_GITHUB_TEST_REPO_URL: ${{ steps.set-outputs.outputs.CWA_GITHUB_TEST_REPO_URL }}"
           echo "CWA_GITHUB_TEST_REPO_BRANCH: ${{ steps.set-outputs.outputs.CWA_GITHUB_TEST_REPO_BRANCH }}"
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{ steps.set-outputs.outputs.CWA_GITHUB_TEST_REPO_NAME }}
           ref: ${{ steps.set-outputs.outputs.CWA_GITHUB_TEST_REPO_BRANCH }}
@@ -131,7 +131,7 @@ jobs:
       ec2_selinux_matrix: ${{ steps.set-matrix.outputs.ec2_selinux_matrix }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: ${{env.CWA_GITHUB_TEST_REPO_NAME}}
           ref: ${{env.CWA_GITHUB_TEST_REPO_BRANCH}}
