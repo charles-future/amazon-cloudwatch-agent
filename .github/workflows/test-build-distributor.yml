@@ -373,7 +373,7 @@ jobs:
             --region ${{ inputs.Region }}
 
       - name: Verify distributor
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v4
         with:
           max_attempts: 6
           timeout_minutes: 5

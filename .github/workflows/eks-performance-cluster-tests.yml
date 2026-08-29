@@ -150,7 +150,7 @@ jobs:
           aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
 
       - name: Install Sample Application
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v4
         with:
           max_attempts: 2
           timeout_minutes: 20
@@ -161,7 +161,7 @@ jobs:
             sleep 900
 
       - name: Run Performance Test
-        uses: nick-fields/retry@v2
+        uses: nick-fields/retry@v4
         with:
           max_attempts: 2
           timeout_minutes: 20
